@@ -1,3 +1,4 @@
+import requests
 from openai import OpenAI
 import json
 
@@ -8,7 +9,12 @@ client = OpenAI(
 
 
 def get_weather(city, **kwargs):
-    return city + '明天下小雨'
+    try:
+        url = f"https://wttr.in/{city}?format=3"
+        response = requests.get(url)
+        return response.text
+    except Exception as e:
+        return f"查天气失败：{e}"
 
 
 def none():
@@ -49,7 +55,7 @@ system_content = f"""
 
 messages = [
      {"role": "system", "content": system_content},
-     {"role": "user", "content": "请计算 1234 加 1234 等于多少"}
+     {"role": "user", "content": "太原天气怎么样"}
 ]
 
 
