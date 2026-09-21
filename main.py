@@ -6,11 +6,6 @@ client = OpenAI(
     base_url="https://open.bigmodel.cn/api/paas/v4"
 )
 
-messages = [
-     {"role": "system", "content": '你有3个工具：get_weather 查天气，none 不需要工具,calculator 计算。你每次只输出一个 JSON，不要输出任何其他文字。格式：{"tool": "工具名", "args": {...}, "done": true或false, "answer": "回答"}。规则：如果要调用工具，done 设为 false，answer 设为空字符串；如果不需要调用工具、可以直接回答用户，done 设为 true，answer 填你的回答。'},
-     {"role": "user", "content": "123*456等于多少呢？"}
-]
-
 
 def get_weather(city, **kwargs):
     return city + '明天下小雨'
@@ -38,6 +33,24 @@ tools = {
         "description": "不需要工具"
     },
 }
+
+
+tool_text = ""
+for name, info in tools.items():
+    tool_text += f"- {name}：{info['description']}\n"
+
+system_content = f"""
+{tool_text}
+    每次只使用一个工具，输出一个json，不要输出其他任何文字。
+    格式：{{"tool": "工具名", "args": { {...} }, "done": true或false, "answer": "回答"}}。
+    规则：如果要调用工具，done 设为 false，answer 设为空字符串；如果不需要调用工具、可以直接回答用户，done 设为 true，answer 填你的回答。
+"""
+
+messages = [
+     {"role": "system", "content": system_content},
+     {"role": "user", "content": "123*456等于多少呢？"}
+]
+
 
 for i in range(10):
     print(f"--- 第 {i + 1} 圈 ---")
