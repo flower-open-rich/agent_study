@@ -38,33 +38,6 @@ tools = {
         "description": "不需要工具"
     },
 }
-# response = client.chat.completions.create(
-#     model="glm-4-flash",
-#     messages=messages
-# )
-#
-# text = response.choices[0].message.content
-# decision = json.loads(text)
-#
-# tool_name = decision['tool']
-# args = decision['args']
-#
-# if tool_name == "get_weather":
-#     result = get_weather(args['city'])
-# elif tool_name == "none":
-#     result = none()
-# else:
-#     result = '未知工具'
-#
-# messages.append({"role": "assistant", "content": text})
-# messages.append({"role": "user", "content": f'工具调用结果是：{result},现在请回答用户。'})
-#
-# response2 = client.chat.completions.create(
-#     model="glm-4-flash",
-#     messages=messages
-# )
-#
-# print(response2.choices[0].message.content)
 
 for i in range(10):
     print(f"--- 第 {i + 1} 圈 ---")
