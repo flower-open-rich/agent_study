@@ -40,15 +40,16 @@ for name, info in tools.items():
     tool_text += f"- {name}：{info['description']}\n"
 
 system_content = f"""
-{tool_text}
+    {tool_text}
+    先跟用户打个招呼，再输出 JSON。
     每次只使用一个工具，输出一个json，不要输出其他任何文字。
-    格式：{{"tool": "工具名", "args": { {...} }, "done": true或false, "answer": "回答"}}。
+    格式：{{"tool": "工具名", "args": {{...}}, "done": true或false, "answer": "回答"}}。
     规则：如果要调用工具，done 设为 false，answer 设为空字符串；如果不需要调用工具、可以直接回答用户，done 设为 true，answer 填你的回答。
 """
 
 messages = [
      {"role": "system", "content": system_content},
-     {"role": "user", "content": "123*456等于多少呢？"}
+     {"role": "user", "content": "请计算 1234 加 1234 等于多少"}
 ]
 
 
@@ -60,7 +61,18 @@ for i in range(10):
     )
     text = response.choices[0].message.content
     print("LLM 说：", text)
-    decision = json.loads(text)
+    # 清洗：只留 { 到 } 之间的内容
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+
+    # 解析，失败就跳过这圈
+    try:
+        decision = json.loads(text)
+    except Exception as e:
+        print("JSON 解析失败：", e)
+        break
     messages.append({"role": "assistant", "content": text})
     done = decision.get('done', False)
     if done:
@@ -70,7 +82,10 @@ for i in range(10):
     tool_info = tools.get(tool_name)
     args = decision['args']
     if tool_info:
-        result = tool_info["function"](**args)
+        try:
+            result = tool_info["function"](**args)
+        except Exception as e:
+            result = f"工具执行出错：{e}"
     else:
         result = '未知工具'
 
