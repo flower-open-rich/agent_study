@@ -1,3 +1,4 @@
+import time
 import requests
 from openai import OpenAI
 import json
@@ -9,12 +10,15 @@ client = OpenAI(
 
 
 def get_weather(city, **kwargs):
-    try:
-        url = f"https://wttr.in/{city}?format=3"
-        response = requests.get(url)
-        return response.text
-    except Exception as e:
-        return f"查天气失败：{e}"
+    for attempt in range(3):
+        try:
+            url = f"https://wttr.in/{city}?format=3"
+            response = requests.get(url, timeout=10)
+            return response.text
+        except Exception as e:
+            if attempt == 2:          # 最后一次还失败
+                return f"查天气失败：{e}"
+            time.sleep(1)
 
 
 def none():
@@ -55,45 +59,50 @@ system_content = f"""
 
 messages = [
      {"role": "system", "content": system_content},
-     {"role": "user", "content": "太原天气怎么样"}
 ]
 
-
-for i in range(10):
-    print(f"--- 第 {i + 1} 圈 ---")
-    response = client.chat.completions.create(
-        model="glm-4-flash",
-        messages=messages
-    )
-    text = response.choices[0].message.content
-    print("LLM 说：", text)
-    # 清洗：只留 { 到 } 之间的内容
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-
-    # 解析，失败就跳过这圈
-    try:
-        decision = json.loads(text)
-    except Exception as e:
-        print("JSON 解析失败：", e)
+while True:
+    user_input = input("你： ")
+    if user_input == "退出":
         break
-    messages.append({"role": "assistant", "content": text})
-    done = decision.get('done', False)
-    if done:
-        print(decision.get('answer', '（模型没给回答）'))
-        break
-    tool_name = decision['tool']
-    tool_info = tools.get(tool_name)
-    args = decision['args']
-    if tool_info:
+
+    messages.append({"role": "user", "content": user_input})
+
+    for i in range(10):
+        print(f"--- 第 {i + 1} 圈 ---")
+        response = client.chat.completions.create(
+            model="glm-4-flash",
+            messages=messages
+        )
+        text = response.choices[0].message.content
+        print("LLM 说：", text)
+        # 清洗：只留 { 到 } 之间的内容
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1:
+            text = text[start:end + 1]
+
+        # 解析，失败就跳过这圈
         try:
-            result = tool_info["function"](**args)
+            decision = json.loads(text)
         except Exception as e:
-            result = f"工具执行出错：{e}"
-    else:
-        result = '未知工具'
+            print("抱歉，我没理解这次的问题，请换种说法再问一次。")
+            break
+        messages.append({"role": "assistant", "content": text})
+        done = decision.get('done', False)
+        if done:
+            print(decision.get('answer', '（模型没给回答）'))
+            break
+        tool_name = decision['tool']
+        tool_info = tools.get(tool_name)
+        args = decision['args']
+        if tool_info:
+            try:
+                result = tool_info["function"](**args)
+            except Exception as e:
+                result = f"工具执行出错：{e}"
+        else:
+            result = '未知工具'
 
-    messages.append({"role": "user", "content": f"工具调用结果是{result}。请根据这个结果回答用户，不要重复调用同一个工具。"})
+        messages.append({"role": "user", "content": f"工具调用结果是{result}。请根据这个结果回答用户，不要重复调用同一个工具。"})
 
