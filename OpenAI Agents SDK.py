@@ -52,7 +52,7 @@ agent = Agent(
     tools=[get_weather, calculator],
 )
 
-session = SQLiteSession("user_1")
+session = SQLiteSession("user_1", "conversations.db")
 
 while True:
     user_input = input("你：")
