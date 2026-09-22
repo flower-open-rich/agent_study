@@ -1,7 +1,7 @@
 import re
 
 import requests
-from agents import Agent, Runner, set_default_openai_client
+from agents import Agent, Runner, set_default_openai_client, SQLiteSession
 from openai import OpenAI, AsyncOpenAI
 from agents import function_tool
 
@@ -48,9 +48,15 @@ def calculator(expression: str) -> str:
 agent = Agent(
     name="Assistant",
     instructions="你是一个有用的助手，可以查天气，计算。",
-    model="glm-4.7-flash",
+    model="glm-4-flash",
     tools=[get_weather, calculator],
 )
 
-result = Runner.run_sync(agent, "我想知道123*987是多少")
-print(result.final_output)
+session = SQLiteSession("user_1")
+
+while True:
+    user_input = input("你：")
+    if user_input == "退出":
+        break
+    result = Runner.run_sync(agent, user_input, session=session)
+    print("Agent:", result.final_output)
