@@ -14,7 +14,7 @@ with open("my_docs.txt", "r", encoding="utf-8") as f:
 documents = [p.strip() for p in content.split("\n\n") if p.strip()]
 
 # 加载模型（只加载一次）
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer('BAAI/bge-small-zh-v1.5')
 
 client = OpenAI(
     api_key="ad0e34a9b3b4486db1cac65af204ccbc.Y2FcPICz0Y1h48je",
@@ -22,31 +22,35 @@ client = OpenAI(
 )
 
 # 多轮问答
-# while True:
-question = input("你：")
-# if question == "退出":
-#     break
+while True:
+    question = input("你：")
+    if question == "退出":
+        break
 
-# 检索
-q_vector = model.encode(question).astype('float32')
-distances, indices = index.search(np.array([q_vector]), 3)
+    # 检索
+    q_vector = model.encode(question).astype('float32')
+    distances, indices = index.search(np.array([q_vector]), 3)
+    # 距离，阈值
+    if distances[0][0] > 0.9:
+        print("Agent：抱歉，我的资料里没有相关内容。")
+        continue
 
-print("最相关距离：", distances[0][0])
+    print("最相关距离：", distances[0][0])
 
-contexts = [documents[i] for i in indices[0]]
-for i, c in enumerate(contexts):
-    print(f"  [{i}] {c}")
-context = "\n".join(contexts)
+    contexts = [documents[i] for i in indices[0]]
+    # for i, c in enumerate(contexts):
+    #     print(f"  [{i}] {c}")
+    context = "\n".join(contexts)
 
-# 调 LLM
-prompt = f"""根据以下资料回答问题，不要编造：
-                资料：{context}
-                问题：{question}
-"""
+    # 调 LLM
+    prompt = f"""根据以下资料回答问题，不要编造：
+                    资料：{context}
+                    问题：{question}
+    """
 
-response = client.chat.completions.create(
-    model="glm-4-flash",
-    messages=[{"role": "user", "content": prompt}]
-)
+    response = client.chat.completions.create(
+        model="glm-4-flash",
+        messages=[{"role": "user", "content": prompt}]
+    )
 
-print("Agent：", response.choices[0].message.content)
+    print("Agent：", response.choices[0].message.content)

@@ -6,17 +6,17 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # 读文件
-with open("道诡异仙.txt", "r", encoding="utf-8") as f:
+with open("my_notes.txt", "r", encoding="utf-8") as f:
     content = f.read()
 
 documents = [p.strip() for p in content.split("\n\n") if p.strip()]
 
 # 算向量
-model = SentenceTransformer('all-MiniLM-L6-v2')
+model = SentenceTransformer('BAAI/bge-small-zh-v1.5')
 doc_vectors = model.encode(documents).astype('float32')
 
 # 建索引
-index = faiss.IndexFlatL2(384)
+index = faiss.IndexFlatL2(512)
 index.add(doc_vectors)
 
 # 存索引
