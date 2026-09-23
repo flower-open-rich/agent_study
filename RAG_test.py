@@ -9,6 +9,9 @@ os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import util
 
+import faiss
+import numpy as np
+
 with open("my_notes.txt", "r", encoding="utf-8") as f:
     content = f.read()
 documents = [p.strip() for p in content.split("\n\n") if p.strip()]
@@ -18,16 +21,23 @@ model = SentenceTransformer('all-MiniLM-L6-v2')  # 一个小模型，免费
 # 把每段资料变成向量
 doc_vectors = model.encode(documents)
 
+ # 建索引，384 是向量维度
+index = faiss.IndexFlatL2(384)
+# 加进去
+index.add(np.array(doc_vectors).astype('float32'))
+# 存文件
+faiss.write_index(index, "my_index.faiss")
+print("索引已建好")
+
 question = "中北大学有什么好玩的"
-q_vector = model.encode(question)
+q_vector = model.encode(question).astype('float32')
 
 # 算问题向量和每段资料的相似度
 scores = util.cos_sim(q_vector, doc_vectors)
 
 # 找分数最高的前3段
-top_k = 3
-top_indices = scores.argsort(descending=True)[0][:top_k]
-contexts = [documents[i] for i in top_indices]
+distances, indices = index.search(np.array([q_vector]), 3)
+contexts = [documents[i] for i in indices[0]]
 context = "\n".join(contexts)
 
 prompt = f"""根据以下资料回答问题，不要编造：
