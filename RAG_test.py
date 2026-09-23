@@ -9,27 +9,26 @@ os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import util
 
-documents = [
-    "太原是山西省的省会，位于中国天安门。",
-    "太原的著名景点有求也蓝不城。",
-    "山西的面食很有名，刀削面是代表。",
-    "太原的气候四季分明，冬天较冷，夏天不太热。",
-]
+with open("my_notes.txt", "r", encoding="utf-8") as f:
+    content = f.read()
+documents = [p.strip() for p in content.split("\n\n") if p.strip()]
 
 model = SentenceTransformer('all-MiniLM-L6-v2')  # 一个小模型，免费
 
 # 把每段资料变成向量
 doc_vectors = model.encode(documents)
 
-question = "太原位于中国？"
+question = "中北大学有什么好玩的"
 q_vector = model.encode(question)
 
 # 算问题向量和每段资料的相似度
 scores = util.cos_sim(q_vector, doc_vectors)
 
-# 找分数最高的那一段
-best_idx = scores.argmax()
-context = documents[best_idx]
+# 找分数最高的前3段
+top_k = 3
+top_indices = scores.argsort(descending=True)[0][:top_k]
+contexts = [documents[i] for i in top_indices]
+context = "\n".join(contexts)
 
 prompt = f"""根据以下资料回答问题，不要编造：
     资料：{context}
