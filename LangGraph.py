@@ -1,9 +1,39 @@
+import os
+
+
+# 开启HF离线模式，禁止联网，直接读本地缓存
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+# 关闭token警告
+os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
+
+
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 from typing import TypedDict, Annotated
 import operator
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
+
+
+# 1. 加载 RAG 相关的东西（模型、索引、原文）
+model_embed = SentenceTransformer('BAAI/bge-small-zh-v1.5')
+index = faiss.read_index("my_index.faiss")
+with open("my_docs.txt", "r", encoding="utf-8") as f:
+    documents = [p.strip() for p in f.read().split("\n\n") if p.strip()]
+
+
+# 2. 把 RAG 封装成工具
+@tool
+def search_my_docs(query: str) -> str:
+    """搜索我的资料库。当用户问关于太原、山西的问题时使用。"""
+    q_vector = model_embed.encode(query).astype('float32')
+    distances, indices = index.search(np.array([q_vector]), 3)
+    contexts = [documents[i] for i in indices[0]]
+    return "\n".join(contexts)
 
 
 # 1. 定义工具
@@ -13,7 +43,7 @@ def get_weather(city: str) -> str:
     return f"{city}今天晴天，25度"
 
 
-tools = [get_weather]
+tools = [search_my_docs, get_weather]
 
 
 # 2. 定义状态
@@ -41,11 +71,13 @@ def tool_node(state: State):
     for tool_call in last_message.tool_calls:
         if tool_call["name"] == "get_weather":
             result = get_weather.invoke(tool_call["args"])
-            results.append({
-                "role": "tool",
-                "content": result,
-                "tool_call_id": tool_call["id"]
-            })
+        elif tool_call["name"] == "search_my_docs":
+            result = search_my_docs.invoke(tool_call["args"])
+        results.append({
+            "role": "tool",
+            "content": result,
+            "tool_call_id": tool_call["id"]
+        })
     return {"messages": results}
 
 
