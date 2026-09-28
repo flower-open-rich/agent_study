@@ -1,42 +1,45 @@
 import os
+import time
 
-
-# 开启HF离线模式，禁止联网，直接读本地缓存
+# HF离线模式，直接读本地缓存
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
-# 关闭token警告
-os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
 
+from typing import TypedDict, Annotated
+import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
 
 from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+# 替换成Sqlite持久化
+from langgraph.checkpoint.sqlite import SqliteSaver
+
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
-from typing import TypedDict, Annotated
-import operator
-from sentence_transformers import SentenceTransformer
-import faiss
-import numpy as np
 
-
-# 1. 加载 RAG 相关的东西（模型、索引、原文）
+# ========== 1. RAG 资源 ==========
 model_embed = SentenceTransformer('BAAI/bge-small-zh-v1.5')
 index = faiss.read_index("my_index.faiss")
-with open("my_docs.txt", "r", encoding="utf-8") as f:
+with open("my_docs.txt", encoding="utf-8") as f:
     documents = [p.strip() for p in f.read().split("\n\n") if p.strip()]
 
 
-# 2. 把 RAG 封装成工具
+# ========== 2. 工具 ==========
 @tool
 def search_my_docs(query: str) -> str:
     """搜索我的资料库。当用户问关于太原、山西的问题时使用。"""
+    t0 = time.time()
     q_vector = model_embed.encode(query).astype('float32')
-    distances, indices = index.search(np.array([q_vector]), 3)
-    contexts = [documents[i] for i in indices[0]]
-    return "\n".join(contexts)
+    _, indices = index.search(np.array([q_vector]), 3)
+    res = "\n".join(documents[i] for i in indices[0])
+    t1 = time.time()
+    print(f"【RAG检索总耗时】{t1 - t0:.2f}s")
+    return res
 
 
-# 1. 定义工具
 @tool
 def get_weather(city: str) -> str:
     """查询指定城市的天气。参数 city 是城市名。"""
@@ -46,60 +49,52 @@ def get_weather(city: str) -> str:
 tools = [search_my_docs, get_weather]
 
 
-# 2. 定义状态
+# ========== 3. 状态与模型 ==========
 class State(TypedDict):
-    messages: Annotated[list, operator.add]
+    messages: Annotated[list, add_messages]
 
 
-# 3. 模型绑定工具
 model = ChatOpenAI(
-    model="glm-4.7-flash",
+    model="glm-4-flash",
     api_key="ad0e34a9b3b4486db1cac65af204ccbc.Y2FcPICz0Y1h48je",
     base_url="https://open.bigmodel.cn/api/paas/v4"
 ).bind_tools(tools)
 
 
-# 4. 两个节点
 def llm_node(state: State):
-    response = model.invoke(state["messages"])
-    return {"messages": [response]}
+    t0 = time.time()
+    resp = model.invoke(state["messages"])
+    t1 = time.time()
+    print(f"【LLM API耗时】{t1 - t0:.2f}s")
+    return {"messages": [resp]}
 
 
-def tool_node(state: State):
-    last_message = state["messages"][-1]
-    results = []
-    for tool_call in last_message.tool_calls:
-        if tool_call["name"] == "get_weather":
-            result = get_weather.invoke(tool_call["args"])
-        elif tool_call["name"] == "search_my_docs":
-            result = search_my_docs.invoke(tool_call["args"])
-        results.append({
-            "role": "tool",
-            "content": result,
-            "tool_call_id": tool_call["id"]
-        })
-    return {"messages": results}
-
-
-# 5. 条件边：LLM 之后，决定去哪
 def should_continue(state: State):
-    last_message = state["messages"][-1]
-    if last_message.tool_calls:
-        return "tools"  # 有工具调用，去工具节点
-    return END  # 没有，结束
+    return "tools" if state["messages"][-1].tool_calls else END
 
 
-# 6. 建图
+# ========== 4. 建图 + SQLite记忆 ==========
 graph = StateGraph(State)
 graph.add_node("llm", llm_node)
-graph.add_node("tools", tool_node)
+graph.add_node("tools", ToolNode(tools))
 
 graph.add_edge(START, "llm")
 graph.add_conditional_edges("llm", should_continue, {"tools": "tools", END: END})
-graph.add_edge("tools", "llm")  # 工具执行完，回到 LLM
+graph.add_edge("tools", "llm")
 
-app = graph.compile()
+# 打开sqlite数据库，文件名叫 chat_memory.db
+conn_string = "chat_memory.db"
+with SqliteSaver.from_conn_string(conn_string) as memory:
+    app = graph.compile(checkpointer=memory)
+    config = {"configurable": {"thread_id": "user_1"}}
 
-# 7. 运行
-result = app.invoke({"messages": [HumanMessage(content="太原天气怎么样？")]})
-print(result["messages"][-1].content)
+    # ========== 5. 运行 ==========
+    print("输入「退出」结束对话")
+    while True:
+        question = input("你：").strip()
+        if question in ("退出", "exit", "quit"):
+            break
+        if not question:
+            continue
+        result = app.invoke({"messages": [HumanMessage(content=question)]}, config=config)
+        print("Agent：", result["messages"][-1].content)
