@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+*.db
+*.faiss
+my_docs.txt
+.venv/
