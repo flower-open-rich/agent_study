@@ -24,7 +24,7 @@ def load_agent():
     # RAG 资源
     model_embed = SentenceTransformer('BAAI/bge-small-zh-v1.5')
     index = faiss.read_index("my_index.faiss")
-    with open("my_docs.txt", encoding="utf-8") as f:
+    with open("../my-agent/my_docs.txt", encoding="utf-8") as f:
         documents = [p.strip() for p in f.read().split("\n\n") if p.strip()]
 
     # 工具

@@ -6,6 +6,7 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 # 关闭token警告
 os.environ["HF_HUB_DISABLE_IMPLICIT_TOKEN"] = "1"
 
+
 from sentence_transformers import SentenceTransformer
 from sentence_transformers import util
 
@@ -21,7 +22,7 @@ model = SentenceTransformer('all-MiniLM-L6-v2')  # 一个小模型，免费
 # 把每段资料变成向量
 doc_vectors = model.encode(documents)
 
- # 建索引，384 是向量维度
+# 建索引，384 是向量维度
 index = faiss.IndexFlatL2(384)
 # 加进去
 index.add(np.array(doc_vectors).astype('float32'))

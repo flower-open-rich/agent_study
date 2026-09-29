@@ -9,7 +9,7 @@ from openai import OpenAI
 # 读索引和原文（只读一次）
 index = faiss.read_index("my_index.faiss")
 
-with open("my_docs.txt", "r", encoding="utf-8") as f:
+with open("../my-agent/my_docs.txt", "r", encoding="utf-8") as f:
     content = f.read()
 documents = [p.strip() for p in content.split("\n\n") if p.strip()]
 

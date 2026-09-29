@@ -1,6 +1,9 @@
 import os
 import time
 
+import requests
+
+import streamlit as st
 # HF离线模式，直接读本地缓存
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -20,10 +23,12 @@ from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 
+import streamlit as st
+
 # ========== 1. RAG 资源 ==========
 model_embed = SentenceTransformer('BAAI/bge-small-zh-v1.5')
 index = faiss.read_index("my_index.faiss")
-with open("my_docs.txt", encoding="utf-8") as f:
+with open("../my-agent/my_docs.txt", encoding="utf-8") as f:
     documents = [p.strip() for p in f.read().split("\n\n") if p.strip()]
 
 
@@ -41,9 +46,16 @@ def search_my_docs(query: str) -> str:
 
 
 @tool
-def get_weather(city: str) -> str:
-    """查询指定城市的天气。参数 city 是城市名。"""
-    return f"{city}今天晴天，25度"
+def get_weather(city, **kwargs):
+    for attempt in range(3):
+        try:
+            url = f"https://wttr.in/{city}?format=3"
+            response = requests.get(url, timeout=10)
+            return response.text
+        except Exception as e:
+            if attempt == 2:  # 最后一次还失败
+                return f"查天气失败：{e}"
+            time.sleep(1)
 
 
 tools = [search_my_docs, get_weather]
