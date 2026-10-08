@@ -1,4 +1,10 @@
 import os
+from dotenv import load_dotenv
+
+# 导入api
+load_dotenv()
+api_key = os.environ.get("ZHIPU_API_KEY")
+import requests
 
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
@@ -15,15 +21,11 @@ from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_openai import ChatOpenAI
 from langchain_core.tools import tool
-from dotenv import load_dotenv
 
-# 导入api
-load_dotenv()
-api_key = os.environ.get("ZHIPU_API_KEY")
 # 加载 RAG 资源
 model_embed = SentenceTransformer('BAAI/bge-small-zh-v1.5')
-index = faiss.read_index("my_index.faiss")
-with open("my_docs.txt", encoding="utf-8") as f:
+index = faiss.read_index("my-agent/my_index.faiss")
+with open("my-agent/my_docs.txt", encoding="utf-8") as f:
     documents = [p.strip() for p in f.read().split("\n\n") if p.strip()]
 
 
@@ -37,8 +39,15 @@ def search_my_docs(query: str) -> str:
 
 @tool
 def get_weather(city: str) -> str:
-    """查询指定城市的天气。参数 city 是城市名。"""
-    return f"{city}今天晴天，25度"
+    """查询指定城市的天气。参数 city 是城市名，比如 太原。"""
+    for attempt in range(3):
+        try:
+            url = f"https://wttr.in/{city}?format=3"
+            response = requests.get(url, timeout=10)
+            return response.text
+        except Exception as e:
+            if attempt == 2:
+                return f"查天气失败：{e}"
 
 
 tools = [search_my_docs, get_weather]
